@@ -1,91 +1,108 @@
-import streamlit as st
 import pandas as pd
-import datetime
-import os
+import streamlit as st
 
-# 1. Setup & Configuration
-st.set_page_config(page_title="Mood Log Lite", page_icon="📝", layout="centered")
-st.title("📝 Mood Log Lite")
-st.write("A lightweight tool to track your emotional well-being over time.")
+# Page configuration
+st.set_page_config(
+    page_title="Mood Tracker App", page_icon="😃", layout="centered"
+)
 
-DATA_FILE = "mood_log.csv"
-
-# Helper functions to load and save data locally
-def load_data():
-    if os.path.exists(DATA_FILE):
-        return pd.read_csv(DATA_FILE)
-    return pd.DataFrame(columns=["Timestamp", "Date", "Mood", "Intensity", "Notes"])
-
-def save_data(df):
-    df.to_csv(DATA_FILE, index=False)
-
-# Load existing entries into session state
-if "mood_df" not in st.session_state:
-    st.session_state.mood_df = load_data()
-
-# 2. Mood Logging Form
-st.subheader("How are you feeling right now?")
-with st.form("mood_form", clear_on_submit=True):
-    # Mood selectors
-    mood_options = ["😊 Happy", "🥱 Tired", "😔 Sad", "😠 Angry", "🧠 Focused", "🧘 Calm", "🌀 Anxious"]
-    selected_mood = st.selectbox("Select your core mood:", mood_options)
-    
-    # Optional metadata
-    intensity = st.slider("Mood Intensity (1 = Barely, 10 = Extremely)", 1, 10, 5)
-    notes = st.text_area("Optional Notes (What's making you feel this way?)", placeholder="Write reflections here...")
-    
-    submit_button = st.form_submit_button("Log Mood")
-
-# Handle form submission
-if submit_button:
-    now = datetime.datetime.now()
-    new_entry = {
-        "Timestamp": now.strftime("%Y-%m-%d %H:%M:%S"),
-        "Date": now.strftime("%Y-%m-%d"),
-        "Mood": selected_mood,
-        "Intensity": intensity,
-        "Notes": notes
-    }
-    
-    # Append data and save
-    st.session_state.mood_df = pd.concat([st.session_state.mood_df, pd.DataFrame([new_entry])], ignore_index=True)
-    save_data(st.session_state.mood_df)
-    st.success("Mood logged successfully!")
-
-# 3. Analytics & Visualization Dashboard
-df = st.session_state.mood_df
-
-if not df.empty:
-    st.divider()
-    st.subheader("📊 Your Mood Analytics")
-    
-    # Quick Summary Metrics
-    total_logs = len(df)
-    most_frequent_mood = df["Mood"].mode()[0] if not df["Mood"].empty else "N/A"
-    avg_intensity = round(df["Intensity"].astype(float).mean(), 1)
-    
-    col1, col2, col3 = st.columns(3)
-    col1.metric("Total Logs", total_logs)
-    col2.metric("Top Mood", most_frequent_mood)
-    col3.metric("Avg Intensity", f"{avg_intensity}/10")
-    
-    # Trend Chart
-    st.write("#### Mood Breakdown")
-    mood_counts = df["Mood"].value_counts()
-    st.bar_chart(mood_counts)
-    
-    # History Log View
-    st.write("#### Recent Entries")
-    st.dataframe(
-        df[["Timestamp", "Mood", "Intensity", "Notes"]].sort_values(by="Timestamp", ascending=False),
-        use_container_width=True
+# Initialize session state to store mood entries
+if "mood_data" not in st.session_state:
+    st.session_state.mood_data = pd.DataFrame(
+        columns=["Name", "Date", "Mood", "Note", "Predicted Mood"]
     )
-    
-    # Option to reset data
-    if st.button("Clear All Data"):
-        if os.path.exists(DATA_FILE):
-            os.remove(DATA_FILE)
-        st.session_state.mood_df = pd.DataFrame(columns=["Timestamp", "Date", "Mood", "Intensity", "Notes"])
-        st.rerun()
+
+st.title("😃 Mood Tracker App")
+st.subheader("Welcome!")
+
+# --- Input Form ---
+with st.form("mood_form"):
+    user_name = st.text_input("Your name", placeholder="Enter your name")
+
+    selected_mood = st.selectbox(
+        "How are you feeling today?",
+        ["Happy", "Excited", "Calm", "Neutral", "Sad", "Anxious", "Stressed"],
+    )
+
+    note = st.text_area(
+        "Add a note (Optional)", placeholder="Write a few thoughts about your day..."
+    )
+
+    # Simulated AI Predicted Mood based on simple keywords or selection
+    ai_prediction = (
+        "Positive"
+        if selected_mood in ["Happy", "Excited", "Calm"]
+        else "Neutral"
+    )
+    st.write(f"**AI Predicted Mood:** {ai_prediction}")
+
+    submitted = st.form_submit_button("Save Entry")
+
+    if submitted:
+        if user_name.strip() == "":
+            st.warning("Please enter your name before saving.")
+        else:
+            new_entry = pd.DataFrame(
+                [
+                    {
+                        "Name": user_name,
+                        "Date": pd.Timestamp.now().strftime(
+                            "%Y-%m-%d %H:%M:%S"
+                        ),
+                        "Mood": selected_mood,
+                        "Note": note,
+                        "Predicted Mood": ai_prediction,
+                    }
+                ]
+            )
+            st.session_state.mood_data = pd.concat(
+                [st.session_state.mood_data, new_entry], ignore_index=True
+            )
+            st.success("Mood entry saved successfully!")
+
+st.divider()
+
+# --- Mood History ---
+st.header("📅 Mood History")
+if not st.session_state.mood_data.empty:
+    st.dataframe(st.session_state.mood_data, use_container_width=True)
 else:
-    st.info("No moods logged yet. Use the form above to log your first mood entry!")
+    st.info("No mood entries recorded yet. Fill out the form above to start!")
+
+# --- Mood Distribution & Trend Visualizations ---
+if not st.session_state.mood_data.empty:
+    st.header("📊 Mood Distribution")
+    mood_counts = st.session_state.mood_data["Mood"].value_counts()
+    st.bar_chart(mood_counts)
+
+    st.header("📈 Sentiment Trend Over Time")
+    # Mapping moods to numerical scores for a simple trend line
+    mood_scores = {
+        "Excited": 5,
+        "Happy": 4,
+        "Calm": 3,
+        "Neutral": 2,
+        "Anxious": 1,
+        "Stressed": 1,
+        "Sad": 0,
+    }
+    trend_data = st.session_state.mood_data.copy()
+    trend_data["Score"] = trend_data["Mood"].map(mood_scores)
+    trend_data["Date"] = pd.to_datetime(trend_data["Date"])
+    trend_data = trend_data.set_index("Date")
+    st.line_chart(trend_data["Score"])
+
+st.divider()
+
+# --- Export Data ---
+st.header("📤 Export Data")
+if not st.session_state.mood_data.empty:
+    csv_data = st.session_state.mood_data.to_csv(index=False).encode("utf-8")
+    st.download_button(
+        label="Download CSV",
+        data=csv_data,
+        file_name="mood_tracker_data.csv",
+        mime="text/csv",
+    )
+else:
+    st.write("No data available to export.")
